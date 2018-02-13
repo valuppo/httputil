@@ -1,10 +1,10 @@
-package httputil
+package Util
 
 import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
+	"gitub.com/sirupsen/logrus"
 )
 
 type ContentType int
@@ -21,26 +21,26 @@ type jsonResponse struct {
 	Data       interface{} `json:"data"`
 }
 
-type httputil struct {
+type Util struct {
 	requestContentType ContentType
 	appError           error
 	isAcceptAllRequest bool
 }
 
-func (hu *httputil) SetApplicationError(err error) {
-	hu.appError = err
+func (u *Util) SetApplicationError(err error) {
+	u.appError = err
 }
 
-func (hu *httputil) SetRequestContentType(contentType ContentType) {
-	hu.requestContentType = contentType
+func (u *Util) SetRequestContentType(contentType ContentType) {
+	u.requestContentType = contentType
 }
 
-func (hu *httputil) AcceptAllRequest(isAcceptAllRequest bool) {
-	hu.isAcceptAllRequest = isAcceptAllRequest
+func (u *Util) AcceptAllRequest(isAcceptAllRequest bool) {
+	u.isAcceptAllRequest = isAcceptAllRequest
 }
 
-func (hu *httputil) DecodeRequest(r *http.Request, req interface{}) {
-	switch hu.requestContentType {
+func (u *Util) DecodeRequest(r *http.Request, req interface{}) {
+	switch u.requestContentType {
 	case JSON:
 		DecodeJSONRequest(r, req)
 	case Form:
@@ -48,27 +48,27 @@ func (hu *httputil) DecodeRequest(r *http.Request, req interface{}) {
 	}
 }
 
-func (hu *httputil) JSON(w http.ResponseWriter, err error, statusCode int, messages []string, data interface{}) {
-	if hu.isAcceptAllRequest {
+func (u *Util) JSON(w http.ResponseWriter, err error, statusCode int, messages []string, data interface{}) {
+	if u.isAcceptAllRequest {
 		AcceptAllRequest(w)
 	}
 
 	SetContentJSON(w)
 
 	switch {
-	case err == hu.appError:
+	case err == u.appError:
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(hu.appJsonError())
+		w.Write(u.appJsonError())
 	case err != nil:
 		w.WriteHeader(statusCode)
-		w.Write(hu.encodeJSONResponse(statusCode, []string{err.Error()}, nil))
+		w.Write(u.encodeJSONResponse(statusCode, []string{err.Error()}, nil))
 	case err == nil:
 		w.WriteHeader(http.StatusOK)
-		w.Write(hu.encodeJSONResponse(statusCode, messages, data))
+		w.Write(u.encodeJSONResponse(statusCode, messages, data))
 	}
 }
 
-func (hu *httputil) encodeJSONResponse(statusCode int, messages []string, data interface{}) []byte {
+func (u *Util) encodeJSONResponse(statusCode int, messages []string, data interface{}) []byte {
 	resp := jsonResponse{
 		StatusCode: statusCode,
 		Messages:   []string{"Internal Server Error"},
@@ -78,12 +78,12 @@ func (hu *httputil) encodeJSONResponse(statusCode int, messages []string, data i
 	bs, err := json.Marshal(&resp)
 	if err != nil {
 		logrus.Error(err)
-		return hu.appJsonError()
+		return u.appJsonError()
 	}
 	return bs
 }
 
-func (hu *httputil) appJsonError() []byte {
+func (u *Util) appJsonError() []byte {
 	resp := jsonResponse{
 		StatusCode: http.StatusInternalServerError,
 		Messages:   []string{"Internal Server Error"},
@@ -94,8 +94,8 @@ func (hu *httputil) appJsonError() []byte {
 	return bs
 }
 
-func New() *httputil {
-	return &httputil{
+func New() *Util {
+	return &Util{
 		requestContentType: JSON,
 		appError:           ErrInternalServerError,
 		isAcceptAllRequest: true,
