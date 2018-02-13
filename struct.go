@@ -1,10 +1,9 @@
-package Util
+package httputil
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
-
-	"gitub.com/sirupsen/logrus"
 )
 
 type ContentType int
@@ -77,7 +76,7 @@ func (u *Util) encodeJSONResponse(statusCode int, messages []string, data interf
 
 	bs, err := json.Marshal(&resp)
 	if err != nil {
-		logrus.Error(err)
+		log.Println(err)
 		return u.appJsonError()
 	}
 	return bs
