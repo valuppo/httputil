@@ -3,6 +3,8 @@ package httputil
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/go-playground/form"
 )
 
 type response struct {
@@ -29,16 +31,26 @@ func AcceptAllRequest(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }
 
-func DecodeRequest(req interface{}, r *http.Request) error {
+func DecodeFormRequest(r *http.Request, req interface{}) error {
+	decoder := form.NewDecoder()
+	r.ParseForm()
+	return decoder.Decode(&req, r.Form)
+}
+
+func DecodeJSONRequest(r *http.Request, req interface{}) error {
 	return json.NewDecoder(r.Body).Decode(&req)
 }
 
-func EncodeResponse(resp interface{}) ([]byte, error) {
+func EncodeJSONResponse(resp interface{}) ([]byte, error) {
 	return json.Marshal(&resp)
 }
 
 func SetContentJSON(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
+}
+
+func SetContentHTML(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html")
 }
 
 func WriteInternalServerError(w http.ResponseWriter) {
