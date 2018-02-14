@@ -21,13 +21,19 @@ type jsonResponse struct {
 }
 
 type Util struct {
-	requestContentType ContentType
-	appError           error
-	isAcceptAllRequest bool
+	requestContentType  ContentType
+	responseContentType ContentType
+	appError            error
+	decodeRequestError  error
+	isAcceptAllRequest  bool
 }
 
 func (u *Util) SetApplicationError(err error) {
 	u.appError = err
+}
+
+func (u *Util) SetDecodeRequestError(err error) {
+	u.decodeRequestError = err
 }
 
 func (u *Util) SetRequestContentType(contentType ContentType) {
@@ -38,16 +44,27 @@ func (u *Util) AcceptAllRequest(isAcceptAllRequest bool) {
 	u.isAcceptAllRequest = isAcceptAllRequest
 }
 
-func (u *Util) DecodeRequest(r *http.Request, req interface{}) {
+func (u *Util) DecodeRequest(r *http.Request, req interface{}) error {
 	switch u.requestContentType {
 	case JSON:
-		DecodeJSONRequest(r, req)
+		return DecodeJSONRequest(r, req)
 	case Form:
-		DecodeFormRequest(r, req)
+		return DecodeFormRequest(r, req)
+	default:
+		return nil
 	}
 }
 
-func (u *Util) JSON(w http.ResponseWriter, err error, statusCode int, messages []string, data interface{}) {
+func (u *Util) EncodeResponse(resp interface{}) ([]byte, error) {
+	switch u.responseContentType {
+	case JSON:
+		return EncodeJSONResponse(resp)
+	default:
+		return nil, nil
+	}
+}
+
+func (u *Util) ErrorJSON(w http.ResponseWriter, err error, statusCode int, data interface{}) {
 	if u.isAcceptAllRequest {
 		AcceptAllRequest(w)
 	}
@@ -58,20 +75,31 @@ func (u *Util) JSON(w http.ResponseWriter, err error, statusCode int, messages [
 	case err == u.appError:
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(u.appJsonError())
-	case err != nil:
+	case err == u.decodeRequestError:
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(u.encodeJSONResponse(http.StatusBadRequest, []string{err.Error()}, data))
+	default:
 		w.WriteHeader(statusCode)
 		w.Write(u.encodeJSONResponse(statusCode, []string{err.Error()}, nil))
-	case err == nil:
-		w.WriteHeader(http.StatusOK)
-		w.Write(u.encodeJSONResponse(statusCode, messages, data))
 	}
+}
+
+func (u *Util) JSON(w http.ResponseWriter, statusCode int, messages []string, data interface{}) {
+	if u.isAcceptAllRequest {
+		AcceptAllRequest(w)
+	}
+
+	SetContentJSON(w)
+
+	w.WriteHeader(statusCode)
+	w.Write(u.encodeJSONResponse(statusCode, messages, data))
 }
 
 func (u *Util) encodeJSONResponse(statusCode int, messages []string, data interface{}) []byte {
 	resp := jsonResponse{
 		StatusCode: statusCode,
-		Messages:   []string{"Internal Server Error"},
-		Data:       nil,
+		Messages:   messages,
+		Data:       data,
 	}
 
 	bs, err := json.Marshal(&resp)
@@ -95,8 +123,10 @@ func (u *Util) appJsonError() []byte {
 
 func New() *Util {
 	return &Util{
-		requestContentType: JSON,
-		appError:           ErrInternalServerError,
-		isAcceptAllRequest: true,
+		requestContentType:  JSON,
+		responseContentType: JSON,
+		appError:            ErrInternalServerError,
+		decodeRequestError:  ErrDecodeRequest,
+		isAcceptAllRequest:  true,
 	}
 }
