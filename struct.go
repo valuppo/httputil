@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/asaskevich/govalidator"
+	"github.com/sirupsen/logrus"
 )
 
 type ContentType int
@@ -25,7 +28,6 @@ type Util struct {
 	responseContentType ContentType
 	appError            error
 	decodeRequestError  error
-	isAcceptAllRequest  bool
 }
 
 func (u *Util) SetApplicationError(err error) {
@@ -40,19 +42,36 @@ func (u *Util) SetRequestContentType(contentType ContentType) {
 	u.requestContentType = contentType
 }
 
-func (u *Util) AcceptAllRequest(isAcceptAllRequest bool) {
-	u.isAcceptAllRequest = isAcceptAllRequest
-}
-
 func (u *Util) DecodeRequest(r *http.Request, req interface{}) error {
 	switch u.requestContentType {
 	case JSON:
-		return DecodeJSONRequest(r, req)
+		if err := DecodeJSONRequest(r, req); err != nil {
+			logrus.Error(err)
+			return u.decodeRequestError
+		}
+		return nil
 	case Form:
-		return DecodeFormRequest(r, req)
+		if err := DecodeFormRequest(r, req); err != nil {
+			logrus.Error(err)
+			return u.decodeRequestError
+		}
+		return nil
 	default:
 		return nil
 	}
+}
+
+func (u *Util) DecodeValidateRequest(r *http.Request, req interface{}) (bool, error) {
+	if err := u.DecodeRequest(r, req); err != nil {
+		logrus.Error(err)
+		return false, err
+	}
+	isValid, err := govalidator.ValidateStruct(req)
+	if err != nil {
+		logrus.Error(err)
+		return isValid, err
+	}
+	return isValid, nil
 }
 
 func (u *Util) EncodeResponse(resp interface{}) ([]byte, error) {
@@ -65,11 +84,7 @@ func (u *Util) EncodeResponse(resp interface{}) ([]byte, error) {
 }
 
 func (u *Util) ErrorJSON(w http.ResponseWriter, err error, statusCode int, data interface{}) {
-	if u.isAcceptAllRequest {
-		AcceptAllRequest(w)
-	}
-
-	SetContentJSON(w)
+	w.Header().Set("Content-Type", "application/json")
 
 	switch {
 	case err == u.appError:
@@ -80,16 +95,12 @@ func (u *Util) ErrorJSON(w http.ResponseWriter, err error, statusCode int, data 
 		w.Write(u.encodeJSONResponse(http.StatusBadRequest, []string{err.Error()}, data))
 	default:
 		w.WriteHeader(statusCode)
-		w.Write(u.encodeJSONResponse(statusCode, []string{err.Error()}, nil))
+		w.Write(u.encodeJSONResponse(statusCode, []string{err.Error()}, data))
 	}
 }
 
 func (u *Util) JSON(w http.ResponseWriter, statusCode int, messages []string, data interface{}) {
-	if u.isAcceptAllRequest {
-		AcceptAllRequest(w)
-	}
-
-	SetContentJSON(w)
+	w.Header().Set("Content-Type", "application/json")
 
 	w.WriteHeader(statusCode)
 	w.Write(u.encodeJSONResponse(statusCode, messages, data))
@@ -127,6 +138,5 @@ func New() *Util {
 		responseContentType: JSON,
 		appError:            ErrInternalServerError,
 		decodeRequestError:  ErrDecodeRequest,
-		isAcceptAllRequest:  true,
 	}
 }

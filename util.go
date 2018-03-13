@@ -2,6 +2,7 @@ package httputil
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/go-playground/form"
@@ -34,11 +35,25 @@ func AcceptAllRequest(w http.ResponseWriter) {
 func DecodeFormRequest(r *http.Request, req interface{}) error {
 	decoder := form.NewDecoder()
 	r.ParseForm()
-	return decoder.Decode(&req, r.Form)
+	err := decoder.Decode(&req, r.Form)
+	switch {
+	case err == io.EOF:
+		return nil
+	case err != nil:
+		return err
+	}
+	return nil
 }
 
 func DecodeJSONRequest(r *http.Request, req interface{}) error {
-	return json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
+	switch {
+	case err == io.EOF:
+		return nil
+	case err != nil:
+		return err
+	}
+	return nil
 }
 
 func EncodeJSONResponse(resp interface{}) ([]byte, error) {
